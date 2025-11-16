@@ -1,7 +1,12 @@
-FROM java:8-jdk-alpine
-LABEL maintainer="Bektur Mambetov"
-WORKDIR /usr/app
-COPY ./target/*.jar /usr/app/cloud.jar
-COPY ./src/main/resources/application-docker.properties /usr/app/application.properties
-CMD ["/bin/sh", "-c", "java -jar /usr/app/cloud.jar -Djava.security.egd=file:/dev/./urandom -Dspring.config.location = /usr/app/application.properties"]
+# Stage 1: Build Angular
+FROM node:16-alpine as build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build-prod
 
+# Stage 2: Serve with Nginx
+FROM nginx:1.15.8-alpine
+COPY default.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
