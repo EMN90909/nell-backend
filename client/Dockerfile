@@ -1,25 +1,41 @@
-# ---- Stage 1: Build Angular ----
-FROM node:16-alpine as build
+# ===========================================================
+# 1. BUILD FRONTEND
+# ===========================================================
+FROM node:18 AS frontend
+
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
+COPY client ./client
 
-# Install dependencies
+WORKDIR /app/client
 RUN npm install
+RUN npm run build --if-present
 
-# Copy the rest of the project
+
+# ===========================================================
+# 2. BUILD BACKEND (Spring Boot)
+# ===========================================================
+FROM maven:3.9.6-eclipse-temurin-17 AS backend
+
+WORKDIR /app
 COPY . .
 
-# Build Angular
-RUN npm run build-prod
+# Build whole multi-module project
+RUN mvn -B -DskipTests clean package
 
 
-# ---- Stage 2: Serve with Nginx ----
-FROM nginx:1.15.8-alpine
+# ===========================================================
+# 3. FINAL RUNTIME IMAGE
+# ===========================================================
+FROM eclipse-temurin:17-jre
 
-# Copy nginx config
-COPY default.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Copy built Angular files
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy Spring Boot jar
+COPY --from=backend /app/opencbs-server/target/*.jar app.jar
+
+# Copy built frontend into Spring Boot's static folder
+COPY --from=frontend /app/client/dist ./static
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
