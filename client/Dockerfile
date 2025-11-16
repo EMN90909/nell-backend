@@ -1,41 +1,33 @@
-# ===========================================================
-# 1. BUILD FRONTEND
-# ===========================================================
-FROM node:18 AS frontend
-
-WORKDIR /app
-
-COPY client ./client
-
+# --------------------------
+# 1. Build frontend
+# --------------------------
+FROM node:18 AS frontend-build
 WORKDIR /app/client
+COPY client/package*.json ./
 RUN npm install
+COPY client/ .
 RUN npm run build --if-present
 
-
-# ===========================================================
-# 2. BUILD BACKEND (Spring Boot)
-# ===========================================================
-FROM maven:3.9.6-eclipse-temurin-17 AS backend
-
-WORKDIR /app
-COPY . .
-
-# Build whole multi-module project
+# --------------------------
+# 2. Build backend
+# --------------------------
+FROM maven:3.9.6-eclipse-temurin-17 AS backend-build
+WORKDIR /app/server
+COPY server/pom.xml ./
+COPY server/src ./src
 RUN mvn -B -DskipTests clean package
 
-
-# ===========================================================
-# 3. FINAL RUNTIME IMAGE
-# ===========================================================
+# --------------------------
+# 3. Final runtime image
+# --------------------------
 FROM eclipse-temurin:17-jre
-
 WORKDIR /app
 
-# Copy Spring Boot jar
-COPY --from=backend /app/opencbs-server/target/*.jar app.jar
+# Copy backend JAR
+COPY --from=backend-build /app/server/target/*.jar app.jar
 
-# Copy built frontend into Spring Boot's static folder
-COPY --from=frontend /app/client/dist ./static
+# Copy frontend build output to static folder
+COPY --from=frontend-build /app/client/dist ./static
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
